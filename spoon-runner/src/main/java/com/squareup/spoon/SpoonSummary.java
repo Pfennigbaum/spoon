@@ -19,8 +19,8 @@ public final class SpoonSummary {
   private final long duration;
   private final Map<String, DeviceResult> results;
 
-  private SpoonSummary(String title, IRemoteAndroidTestRunner.TestSize testSize, long started,
-      long duration, Map<String, DeviceResult> results) {
+  SpoonSummary(String title, IRemoteAndroidTestRunner.TestSize testSize, long started,
+               long duration, Map<String, DeviceResult> results) {
     this.title = title;
     this.testSize = testSize;
     this.started = started;

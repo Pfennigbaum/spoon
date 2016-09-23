@@ -59,6 +59,7 @@ public final class SpoonRunner {
   private final String classpath;
   private final IRemoteAndroidTestRunner.TestSize testSize;
   private boolean codeCoverage;
+  private File mergeIntoDirectory;
   private final boolean failIfNoDeviceConnected;
   private final List<ITestRunListener> testRunListeners;
   private final boolean terminateAdb;
@@ -71,7 +72,7 @@ public final class SpoonRunner {
       boolean shard, String classpath, List<String> instrumentationArgs, String className,
       String methodName, IRemoteAndroidTestRunner.TestSize testSize,
       boolean failIfNoDeviceConnected, List<ITestRunListener> testRunListeners, boolean sequential,
-      File initScript, boolean grantAll, boolean terminateAdb, boolean codeCoverage) {
+      File initScript, boolean grantAll, boolean terminateAdb, boolean codeCoverage,File mergeIntoDirectory) {
     this.title = title;
     this.androidSdk = androidSdk;
     this.applicationApk = applicationApk;
@@ -87,6 +88,7 @@ public final class SpoonRunner {
     this.testSize = testSize;
     this.skipDevices = skipDevices;
     this.codeCoverage = codeCoverage;
+    this.mergeIntoDirectory= mergeIntoDirectory;
     this.serials = ImmutableSet.copyOf(serials);
     this.shard = shard;
     this.failIfNoDeviceConnected = failIfNoDeviceConnected;
@@ -130,8 +132,21 @@ public final class SpoonRunner {
 
       // Execute all the things...
       SpoonSummary summary = runTests(adb, serials);
-      // ...and render to HTML
-      new HtmlRenderer(summary, SpoonUtils.GSON, output).render();
+
+      if(mergeIntoDirectory != null){
+        SpoonSummary mergedsummary = SpoonSummaryMerger.mergeSpoonSummaryWithExistingSummaryFromFolder(summary,mergeIntoDirectory);
+        try {
+          FileUtils.deleteDirectory(mergeIntoDirectory);
+        } catch (IOException e) {
+          throw new RuntimeException("Unable to clean mergeIntoDirectory : " + mergeIntoDirectory, e);
+        }
+        // ...and render to HTML
+        new HtmlRenderer(mergedsummary, SpoonUtils.GSON, mergeIntoDirectory).render();
+      }else{
+        // ...and render to HTML
+        new HtmlRenderer(summary, SpoonUtils.GSON, output).render();
+
+      }
 
       return parseOverallSuccess(summary);
     } finally {
@@ -329,6 +344,7 @@ public final class SpoonRunner {
     private boolean grantAll;
     private boolean terminateAdb = true;
     private boolean codeCoverage;
+    private File mergeIntoDirectory;
     private boolean shard = false;
 
     /** Identifying title for this execution. */
@@ -479,6 +495,11 @@ public final class SpoonRunner {
       return this;
     }
 
+    public Builder setMergeIntoDirectory(File mergeIntoDirectory) {
+      this.mergeIntoDirectory = mergeIntoDirectory;
+      return this;
+    }
+
     public Builder setShard(boolean shard) {
       this.shard = shard;
       return this;
@@ -510,7 +531,7 @@ public final class SpoonRunner {
       return new SpoonRunner(title, androidSdk, applicationApk, instrumentationApk, output, debug,
           noAnimations, adbTimeoutMillis, serials, skipDevices, shard, classpath,
           instrumentationArgs, className, methodName, testSize, failIfNoDeviceConnected,
-          testRunListeners, sequential, initScript, grantAll, terminateAdb, codeCoverage);
+          testRunListeners, sequential, initScript, grantAll, terminateAdb, codeCoverage, mergeIntoDirectory);
     }
   }
 
@@ -607,6 +628,9 @@ public final class SpoonRunner {
     @Parameter(names = { "--coverage" }, description = "Code coverage flag", arity = 1)
     public Boolean codeCoverage = false;
 
+    @Parameter(names = { "--mergeDir" }, description = "Path, where Results will be merged into", converter = FileConverter.class)
+    public File mergeIntoDirectory;
+
     @Parameter(names = { "-h", "--help" }, description = "Command help", help = true, hidden = true)
     public boolean help;
   }
@@ -670,6 +694,7 @@ public final class SpoonRunner {
         .setGrantAll(parsedArgs.grantAll)
         .setInstrumentationArgs(parsedArgs.instrumentationArgs)
         .setCodeCoverage(parsedArgs.codeCoverage)
+        .setMergeIntoDirectory(parsedArgs.mergeIntoDirectory)
         .setClassName(parsedArgs.className)
         .setMethodName(parsedArgs.methodName)
         .setShard(parsedArgs.shard);
